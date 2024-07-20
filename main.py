@@ -1,5 +1,5 @@
 '''
-Spaceship pixel art cuz im bad at art...
+Spaceship pixel art...
 https://www.pixilart.com/photo/spaceship-dab5127eb1fe665
 https://tinyurl.com/ydafylpp
 '''
@@ -21,8 +21,8 @@ window_size=(1280, 720)
 
 window = pygame.display.set_mode(window_size)
 pygame.display.set_caption("SpaceBoi")
-#pygame.mixer.music.load("assets/Track1.wav")
-#pygame.mixer.music.play(-1)
+pygame.mixer.music.load("assets/Track1.wav")
+pygame.mixer.music.play(-1)
 bgcolor = (45, 49, 52)
 player_image = pygame.image.load("assets/ship.png").convert_alpha()
 scout_image = pygame.image.load("assets/scout.png").convert_alpha()
@@ -42,10 +42,12 @@ class Bullets:
 class player_health():
     shields = 25
     health = 100
+    last_dmg_tick = -1
 @dataclass
 class player_location():
     x = (window.get_width()/2)-40
     y = (window.get_height()/2)-40
+    rect = pygame.Rect((x-20, y-20), (player_image.get_width(), player_image.get_height()))
 @dataclass
 class player_moving(): 
     left = False 
@@ -57,15 +59,29 @@ class last_shot():
     machine_gun = time.time()
     missile = time.time()
 
+top_edge = pygame.Rect(0, 0, window.get_width(), 1)
+bottom_edge = pygame.Rect(0, window.get_height() - 1, window.get_width(), 1)
+left_edge = pygame.Rect(0, 0, 1, window.get_height())
+right_edge = pygame.Rect(window.get_width() - 1, 0, 1, window.get_height())
+
 def player_movement():
-    if player_moving.left:
+    if player_moving.left and not player_location.rect.colliderect(left_edge):
         player_location.x -= 6
-    if player_moving.right:
+    if player_moving.right and not player_location.rect.colliderect(right_edge):
         player_location.x += 6
-    if player_moving.up:
+    if player_moving.up and not player_location.rect.colliderect(top_edge):
         player_location.y -= 6
-    if player_moving.down:
+    if player_moving.down and not player_location.rect.colliderect(bottom_edge):
         player_location.y += 6
+    diff_multiplier = .8
+    player_location.rect = pygame.Rect((player_location.x-((player_image.get_width()*diff_multiplier)/2), player_location.y-((player_image.get_height()*diff_multiplier)/2)), (player_image.get_width()*diff_multiplier, player_image.get_height()*diff_multiplier))
+    if player_health.health <= 0:
+        print("-----------GAME OVER------------")
+        print(f"Scout kills: {'undefined'}")
+        print()
+        print(f"Total kills: {'undefined'}")
+        pygame.quit()
+        sys.exit()
 
 class PlayerBullet:
     def __init__(self, x, y, mouse_x, mouse_y,speed, color):
@@ -95,7 +111,8 @@ class Scout:
         self.y_vel = math.sin(self.angle)*self.speed
         self.color = (255, 166, 0)
         self.shields = 30
-        self.health = 20
+        self.health = 5
+        self.hit = 5
         self.rect = None
         self.damage = False
         self.type = "scout"
@@ -115,6 +132,14 @@ class Scout:
             self.damage = False
         window.blit(img_copy, (self.x-int(img_copy.get_width()/2), self.y-int(img_copy.get_height()/2)))
         self.rect = pygame.Rect((self.x-20, self.y-20), (scout_image.get_width(), scout_image.get_height()))
+        if self.rect.colliderect(player_location.rect):
+            if pygame.time.get_ticks() - player_health.last_dmg_tick >= 1000:
+                player_health.health -= self.hit
+                player_health.last_dmg_tick = pygame.time.get_ticks()
+                Enemies.scouts.remove(self)
+                #scouts_killed += 1
+                print(player_health.health)
+            
 #event handler
 def event_handler(event):
     global button_down_main, button_down_secondary
@@ -171,6 +196,7 @@ class gun:
                         enemy.shields -= 5
                     if scout.health <= 0:
                         Enemies.scouts.remove(enemy)
+                        #scouts_killed += 1
     def missile():
         global missile_delay
         current_time=time.time()
@@ -186,7 +212,8 @@ class gun:
                 enemy.damage = True
                 Bullets.missiles.remove(missile)
                 if enemy.type == "scout":
-                    Enemies.scouts.remove(enemy)     
+                    Enemies.scouts.remove(enemy)
+                    #scouts_killed += 1     
 
 while True:
     window.fill(bgcolor) #clear screen with backround color
@@ -205,6 +232,7 @@ while True:
         missile.main(window)
     #-----------------------------------------------
     player_movement() #do player movement
+    #pygame.draw.rect(window, (0,0,0), player_location.rect, 1)
     #------rotate player image to mouse cursor-------
     mouse_x, mouse_y = pygame.mouse.get_pos()
     rel_x, rel_y = mouse_x - player_location.x, mouse_y - player_location.y
@@ -214,14 +242,15 @@ while True:
     window.blit(img_copy, (player_location.x-int(img_copy.get_width()/2), player_location.y-int(img_copy.get_height()/2)))
     #-------------------------------------------------
     #Enemy spawning (Temporary)
-    if random.randint(1, 100) > 99:
+    if random.randint(1, int(100-(pygame.time.get_ticks()*.001))) <= 1:
         Enemies.scouts.append(Scout())
 
     for scout in Enemies.scouts:
         scout.main(window)
-        pygame.draw.rect(window, (0,0,0), scout.rect, 1)
+        #pygame.draw.rect(window, (0,0,0), scout.rect, 1)
         gun.machine_gun_bullets(scout)
         gun.missile_logic(scout)
+
 
     #Bonk
     pygame.display.update() #update *ENTIRE* display
